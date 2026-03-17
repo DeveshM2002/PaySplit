@@ -1,0 +1,82 @@
+# WHY YAML over .properties?
+# YAML supports nesting (spring.datasource.url becomes a tree), is more readable,
+# and is the industry preference for Spring Boot. .properties is flat key-value — works
+# fine but gets unwieldy with deep nesting.
+
+spring:
+  application:
+    name: splitwise-backend
+
+  # We use Spring Profiles to switch configs between dev and prod.
+  # "dev" profile uses H2 in-memory DB so you don't need PostgreSQL installed.
+  # "prod" profile would use real PostgreSQL.
+  profiles:
+    active: dev
+
+  # JPA / Hibernate configuration
+  jpa:
+    # ddl-auto options:
+    # - create: Drops and recreates tables every restart (data lost)
+    # - update: Alters tables to match entities (safe for dev, risky for prod)
+    # - validate: Only checks if schema matches entities (safe for prod)
+    # - none: Does nothing (you manage schema yourself with Flyway/Liquibase)
+    # We use "update" for dev convenience. In production, use Flyway migrations.
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.H2Dialect
+
+  # H2 file-based database — data persists across backend restarts
+  # The DB file will be created at ./splitwise-db.mv.db in the backend folder
+  datasource:
+    url: jdbc:h2:file:./splitwise-db;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=TRUE;AUTO_RECONNECT=TRUE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  # H2 console — web UI to inspect your database at http://localhost:8080/h2-console
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  # Mail configuration (using a dummy for dev, configure real SMTP for prod)
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME:your-email@gmail.com}
+    password: ${MAIL_PASSWORD:your-app-password}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+# JWT Configuration
+# These values would come from environment variables in production (never hardcode secrets)
+app:
+  jwt:
+    secret: ${JWT_SECRET:myVeryLongAndSecureSecretKeyForJWTTokenGenerationThatIsAtLeast256BitsLong2024}
+    expiration-ms: 86400000        # 24 hours
+    refresh-expiration-ms: 604800000  # 7 days
+
+# Server configuration
+server:
+  port: 8080
+
+# Swagger/OpenAPI docs available at: http://localhost:8080/swagger-ui.html
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /api-docs
+
+# Logging — show SQL parameters in dev for debugging
+logging:
+  level:
+    com.splitwise: DEBUG
+    org.springframework.security: DEBUG

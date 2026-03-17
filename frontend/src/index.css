@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+/*
+  TAILWIND v4 DARK MODE FIX:
+  
+  By default, Tailwind v4 uses @media (prefers-color-scheme: dark) for the dark: variant.
+  That means dark: classes only work based on the OS/browser setting — NOT our toggle button.
+  
+  We override this with @custom-variant so dark: is triggered by the .dark class
+  on the <html> element (which our themeStore toggles).
+  
+  WHY this approach? Because we want user-controlled dark mode (toggle button),
+  not just OS-level preference. The user can choose light mode even if their OS is dark.
+*/
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --color-primary: #1dc29f;
+    --color-primary-dark: #17a085;
+    --color-primary-light: #a3e4d7;
+    --color-danger: #e74c3c;
+    --color-warning: #f39c12;
+    --color-success: #27ae60;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-[var(--color-primary)] hover:bg-[var(--color-primary-dark)] text-white 
+           font-medium py-2.5 px-5 rounded-lg transition-colors duration-200 
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2.5 px-5 
+           rounded-lg transition-colors duration-200
+           dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200;
+  }
+
+  .btn-danger {
+    @apply bg-red-500 hover:bg-red-600 text-white font-medium py-2.5 px-5 
+           rounded-lg transition-colors duration-200;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-2.5 border border-gray-300 rounded-lg 
+           focus:ring-2 focus:ring-[var(--color-primary)] focus:border-transparent 
+           outline-none transition-all duration-200
+           dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100
+           dark:placeholder-gray-400;
+  }
+
+  .card {
+    @apply bg-white rounded-xl shadow-sm border border-gray-100 p-6
+           dark:bg-gray-800 dark:border-gray-700;
+  }
+}
