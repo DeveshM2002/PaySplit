@@ -10,9 +10,13 @@ import {
   LineChart,
   Line,
 } from 'recharts';
+import { SparklesIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { dashboardApi } from '../../api/dashboard';
+import { assistantApi } from '../../api/assistant';
 import useAuthStore from '../../store/authStore';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import AssistantPanel from '../../components/ui/AssistantPanel';
+import AiChatInput from '../../components/ui/AiChatInput';
 import {
   formatCurrency,
   formatRelativeTime,
@@ -22,6 +26,19 @@ export default function DashboardPage() {
   const { user } = useAuthStore();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [aiBalanceExplanation, setAiBalanceExplanation] = useState(null);
+  const [aiBalanceLoading, setAiBalanceLoading] = useState(false);
+  const [aiBalanceError, setAiBalanceError] = useState(null);
+  const [aiChartCaption, setAiChartCaption] = useState(null);
+  const [aiChartLoading, setAiChartLoading] = useState(false);
+  const [aiQnAResult, setAiQnAResult] = useState(null);
+  const [aiQnALoading, setAiQnALoading] = useState(false);
+  const [aiQnAError, setAiQnAError] = useState(null);
+  const [coherenceFlags, setCoherenceFlags] = useState([]);
+  const [coherenceLoading, setCoherenceLoading] = useState(false);
+  const [whatIfResult, setWhatIfResult] = useState(null);
+  const [whatIfLoading, setWhatIfLoading] = useState(false);
+  const [whatIfCategories, setWhatIfCategories] = useState([]);
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -43,6 +60,75 @@ export default function DashboardPage() {
     };
     fetchDashboard();
   }, []);
+
+  const handleExplainBalance = async () => {
+    try {
+      setAiBalanceLoading(true);
+      setAiBalanceError(null);
+      const res = await assistantApi.explainBalance();
+      setAiBalanceExplanation(res.data);
+    } catch (err) {
+      setAiBalanceError(
+        err.response?.data?.message || err.response?.data?.error || 'Failed to get AI explanation'
+      );
+    } finally {
+      setAiBalanceLoading(false);
+    }
+  };
+
+  const handleChartCaption = async (chartKind, series) => {
+    try {
+      setAiChartLoading(true);
+      const res = await assistantApi.chartCaption(chartKind, series);
+      setAiChartCaption(res.data);
+    } catch {
+      // silent fail for caption
+    } finally {
+      setAiChartLoading(false);
+    }
+  };
+
+  const handleExpenseQnA = async (question) => {
+    try {
+      setAiQnALoading(true);
+      setAiQnAError(null);
+      const chartSummary = {
+        spendingByCategory,
+        monthlySpending,
+      };
+      const res = await assistantApi.expenseQnA(question, undefined, undefined, chartSummary);
+      setAiQnAResult(res.data);
+    } catch (err) {
+      setAiQnAError(err.response?.data?.message || err.response?.data?.error || 'Failed to get answer');
+    } finally {
+      setAiQnALoading(false);
+    }
+  };
+
+  const handleCoherenceScan = async () => {
+    try {
+      setCoherenceLoading(true);
+      const res = await assistantApi.coherenceScan();
+      setCoherenceFlags(res.data || []);
+    } catch {
+      setCoherenceFlags([]);
+    } finally {
+      setCoherenceLoading(false);
+    }
+  };
+
+  const handleWhatIf = async () => {
+    if (whatIfCategories.length === 0) return;
+    try {
+      setWhatIfLoading(true);
+      const res = await assistantApi.whatIf(whatIfCategories);
+      setWhatIfResult(res.data);
+    } catch {
+      setWhatIfResult(null);
+    } finally {
+      setWhatIfLoading(false);
+    }
+  };
 
   if (loading) {
     return <LoadingSpinner />;
@@ -94,6 +180,26 @@ export default function DashboardPage() {
               {formatCurrency(netBalance)}
             </p>
           </div>
+        </div>
+
+        {/* AI Balance Explanation */}
+        <div className="mb-8">
+          <AssistantPanel
+            title="AI Balance Explanation"
+            loading={aiBalanceLoading}
+            error={aiBalanceError}
+            narrative={aiBalanceExplanation?.narrative}
+            citations={aiBalanceExplanation?.citations || []}
+          />
+          {!aiBalanceExplanation && !aiBalanceLoading && (
+            <button
+              onClick={handleExplainBalance}
+              className="mt-2 text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 flex items-center gap-1.5"
+            >
+              <SparklesIcon className="w-4 h-4" />
+              Explain my balance with AI
+            </button>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -250,6 +356,134 @@ export default function DashboardPage() {
             </div>
           </div>
         )}
+
+        {/* AI Expense Q&A */}
+        <div className="mb-8 mt-8">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
+            Ask about your expenses
+          </h2>
+          <AiChatInput
+            placeholder="e.g., How much did I spend on food this month?"
+            onSubmit={handleExpenseQnA}
+            loading={aiQnALoading}
+          />
+          {aiQnAResult && (
+            <AssistantPanel
+              title="Answer"
+              narrative={aiQnAResult.narrative}
+              citations={aiQnAResult.citations || []}
+              defaultOpen={true}
+              className="mt-3"
+            />
+          )}
+          {aiQnAError && (
+            <p className="mt-2 text-sm text-red-500">{aiQnAError}</p>
+          )}
+        </div>
+
+        {/* Coherence Scan */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              Spending Health Check
+            </h2>
+            <button
+              onClick={handleCoherenceScan}
+              disabled={coherenceLoading}
+              className="text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 flex items-center gap-1.5"
+            >
+              {coherenceLoading ? (
+                <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <SparklesIcon className="w-4 h-4" />
+              )}
+              Scan
+            </button>
+          </div>
+          {coherenceFlags.length > 0 && (
+            <div className="space-y-2">
+              {coherenceFlags.map((flag, i) => (
+                <div key={i} className="p-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30">
+                  <div className="flex items-start gap-2">
+                    <ExclamationTriangleIcon className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                        {flag.flagType === 'POSSIBLE_DUPLICATE' ? 'Possible Duplicate' : 'Category Mismatch'}
+                      </p>
+                      <p className="text-sm text-amber-700 dark:text-amber-300 mt-0.5">{flag.reason}</p>
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                        {flag.expense1Description}
+                        {flag.expense2Description && ` / ${flag.expense2Description}`}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {coherenceFlags.length === 0 && !coherenceLoading && (
+            <p className="text-sm text-gray-500 dark:text-gray-400">Click Scan to check for issues.</p>
+          )}
+        </div>
+
+        {/* What-If Explorer */}
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
+            What-If Explorer
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+            Select categories to exclude and see how your spending changes.
+          </p>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {['FOOD', 'TRANSPORT', 'RENT', 'UTILITIES', 'ENTERTAINMENT', 'SHOPPING', 'HEALTHCARE', 'EDUCATION', 'TRAVEL', 'GROCERIES', 'SUBSCRIPTIONS'].map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() =>
+                  setWhatIfCategories((prev) =>
+                    prev.includes(cat) ? prev.filter((c) => c !== cat) : [...prev, cat]
+                  )
+                }
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  whatIfCategories.includes(cat)
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={handleWhatIf}
+            disabled={whatIfCategories.length === 0 || whatIfLoading}
+            className="btn-primary text-sm px-4 py-2 disabled:opacity-50"
+          >
+            {whatIfLoading ? 'Calculating...' : 'Calculate'}
+          </button>
+          {whatIfResult && (
+            <AssistantPanel
+              title="What-If Results"
+              narrative={whatIfResult.narrative}
+              defaultOpen={true}
+              className="mt-3"
+            >
+              <div className="grid grid-cols-2 gap-3 mt-2 text-sm">
+                <div className="p-2 rounded-lg bg-white/60 dark:bg-gray-800/60">
+                  <p className="text-gray-500 dark:text-gray-400 text-xs">Original Total</p>
+                  <p className="font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(whatIfResult.originalTotal)}</p>
+                </div>
+                <div className="p-2 rounded-lg bg-white/60 dark:bg-gray-800/60">
+                  <p className="text-gray-500 dark:text-gray-400 text-xs">After Excluding</p>
+                  <p className="font-semibold text-gray-900 dark:text-gray-100">{formatCurrency(whatIfResult.adjustedTotal)}</p>
+                </div>
+              </div>
+              <p className="text-sm text-emerald-600 dark:text-emerald-400 mt-2 font-medium">
+                You would save {formatCurrency(whatIfResult.difference)}
+              </p>
+            </AssistantPanel>
+          )}
+        </div>
       </div>
     </div>
   );

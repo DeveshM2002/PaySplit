@@ -51,4 +51,14 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long> {
     List<Expense> findNonGroupExpensesBetweenUsers(
             @Param("userId1") Long userId1,
             @Param("userId2") Long userId2);
+
+    /**
+     * Expenses the user participates in where description/category/attached comments match keyword.
+     */
+    @Query("SELECT DISTINCT e FROM Expense e JOIN e.splits spl WHERE spl.user.id = :userId "
+            + "AND (LOWER(e.description) LIKE LOWER(CONCAT('%', :q, '%')) "
+            + "OR LOWER(CAST(e.category AS string)) LIKE LOWER(CONCAT('%', :q, '%')) "
+            + "OR EXISTS (SELECT 1 FROM Comment c WHERE c.expense.id = e.id "
+            + "AND LOWER(c.content) LIKE LOWER(CONCAT('%', :q, '%'))))")
+    Page<Expense> searchInvolvingUserByKeyword(@Param("userId") Long userId, @Param("q") String q, Pageable pageable);
 }

@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { SparklesIcon } from '@heroicons/react/24/outline';
 import { settlementApi } from '../../api/settlements';
 import { groupApi } from '../../api/groups';
 import { userApi } from '../../api/users';
+import { assistantApi } from '../../api/assistant';
 import useAuthStore from '../../store/authStore';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import AssistantPanel from '../../components/ui/AssistantPanel';
 
 export default function SettlePage() {
   const navigate = useNavigate();
@@ -19,6 +22,8 @@ export default function SettlePage() {
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState(null);
+  const [settlementBriefing, setSettlementBriefing] = useState(null);
+  const [briefingLoading, setBriefingLoading] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -41,6 +46,23 @@ export default function SettlePage() {
     };
     load();
   }, []);
+
+  const handleBriefing = async () => {
+    if (!groupId) {
+      setError('Select a group first to get an AI settlement briefing');
+      return;
+    }
+    try {
+      setBriefingLoading(true);
+      setError(null);
+      const res = await assistantApi.settlementBriefing(Number(groupId));
+      setSettlementBriefing(res.data);
+    } catch {
+      setSettlementBriefing(null);
+    } finally {
+      setBriefingLoading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -74,6 +96,33 @@ export default function SettlePage() {
       <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">
         Record Settlement
       </h1>
+
+      <div className="mb-6">
+        <AssistantPanel
+          title="AI Settlement Briefing"
+          loading={briefingLoading}
+          narrative={settlementBriefing?.narrative}
+          citations={settlementBriefing?.citations || []}
+        />
+        {!settlementBriefing && !briefingLoading && (
+          <div className="mt-2 space-y-1">
+            {!groupId && (
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Select a group below to fetch a group-scoped AI settlement briefing.
+              </p>
+            )}
+            <button
+              type="button"
+              disabled={!groupId}
+              onClick={handleBriefing}
+              className="text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
+            >
+              <SparklesIcon className="w-4 h-4" />
+              Get AI settlement briefing
+            </button>
+          </div>
+        )}
+      </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>

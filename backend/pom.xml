@@ -128,6 +128,19 @@
             <version>2.4.0</version>
         </dependency>
 
+        <!-- Jackson for JSON processing in AI assistant -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+
+        <!-- Load backend/.env into JVM properties before Spring reads application.yml placeholders -->
+        <dependency>
+            <groupId>io.github.cdimascio</groupId>
+            <artifactId>dotenv-java</artifactId>
+            <version>3.0.2</version>
+        </dependency>
+
         <!-- Test dependencies -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

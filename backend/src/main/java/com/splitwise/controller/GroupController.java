@@ -98,21 +98,27 @@ public class GroupController {
     @GetMapping("/{groupId}/balances")
     @Operation(summary = "Get all pairwise debts within a group")
     public ResponseEntity<List<BalanceResponse.DebtEntry>> getGroupBalances(
+            @CurrentUser UserPrincipal currentUser,
             @PathVariable Long groupId) {
+        groupService.getGroupById(groupId, currentUser.getId());
         return ResponseEntity.ok(balanceService.getGroupDebts(groupId));
     }
 
     @GetMapping("/{groupId}/simplified-debts")
     @Operation(summary = "Get simplified debts for the group")
     public ResponseEntity<List<BalanceResponse.DebtEntry>> getSimplifiedDebts(
+            @CurrentUser UserPrincipal currentUser,
             @PathVariable Long groupId) {
+        groupService.getGroupById(groupId, currentUser.getId());
         return ResponseEntity.ok(balanceService.getSimplifiedDebts(groupId));
     }
 
     @GetMapping("/{groupId}/member-balances")
     @Operation(summary = "Get per-person net balance summary in a group")
     public ResponseEntity<List<BalanceResponse.UserBalance>> getMemberBalances(
+            @CurrentUser UserPrincipal currentUser,
             @PathVariable Long groupId) {
+        groupService.getGroupById(groupId, currentUser.getId());
         return ResponseEntity.ok(balanceService.getGroupMemberBalances(groupId));
     }
 }

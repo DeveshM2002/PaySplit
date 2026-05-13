@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
+import { SparklesIcon } from '@heroicons/react/24/outline';
 import { dashboardApi } from '../../api/dashboard';
+import { assistantApi } from '../../api/assistant';
 import { formatRelativeTime } from '../../utils/helpers';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import AssistantPanel from '../../components/ui/AssistantPanel';
 
 const ACTIVITY_ICONS = {
   expense: '💰',
@@ -28,6 +31,8 @@ export default function ActivityPage() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
+  const [aiNarrative, setAiNarrative] = useState(null);
+  const [aiNarrativeLoading, setAiNarrativeLoading] = useState(false);
 
   const pageSize = 20;
 
@@ -70,6 +75,18 @@ export default function ActivityPage() {
     }
   };
 
+  const handleActivityNarrative = async () => {
+    try {
+      setAiNarrativeLoading(true);
+      const res = await assistantApi.activityNarrative('USER', null, 20);
+      setAiNarrative(res.data);
+    } catch {
+      setAiNarrative(null);
+    } finally {
+      setAiNarrativeLoading(false);
+    }
+  };
+
   if (loading) {
     return <LoadingSpinner />;
   }
@@ -79,6 +96,24 @@ export default function ActivityPage() {
       <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">
         Activity
       </h1>
+
+      <div className="mb-6">
+        <AssistantPanel
+          title="AI Activity Summary"
+          loading={aiNarrativeLoading}
+          narrative={aiNarrative?.narrative}
+          citations={aiNarrative?.citations || []}
+        />
+        {!aiNarrative && !aiNarrativeLoading && (
+          <button
+            onClick={handleActivityNarrative}
+            className="mt-2 text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 flex items-center gap-1.5"
+          >
+            <SparklesIcon className="w-4 h-4" />
+            Summarize my activity with AI
+          </button>
+        )}
+      </div>
 
       {error && (
         <div className="mb-6 p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400">

@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import {
   UserPlusIcon,
   PlusIcon,
+  SparklesIcon,
 } from '@heroicons/react/24/outline';
 import {
   BanknotesIcon,
@@ -15,6 +16,7 @@ import { expenseApi } from '../../api/expenses';
 import { settlementApi } from '../../api/settlements';
 import { dashboardApi } from '../../api/dashboard';
 import { userApi } from '../../api/users';
+import { assistantApi } from '../../api/assistant';
 import useAuthStore from '../../store/authStore';
 import {
   formatCurrency,
@@ -25,6 +27,7 @@ import {
 import Avatar from '../../components/ui/Avatar';
 import Modal from '../../components/ui/Modal';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import AssistantPanel from '../../components/ui/AssistantPanel';
 
 const TABS = [
   { id: 'expenses', label: 'Expenses', icon: BanknotesIcon },
@@ -50,6 +53,11 @@ export default function GroupDetailPage() {
   const [memberFilter, setMemberFilter] = useState('');
   const [allUsers, setAllUsers] = useState([]);
   const [addingMember, setAddingMember] = useState(false);
+
+  const [settlementBriefing, setSettlementBriefing] = useState(null);
+  const [settlementBriefingLoading, setSettlementBriefingLoading] = useState(false);
+  const [groupDigest, setGroupDigest] = useState(null);
+  const [groupDigestLoading, setGroupDigestLoading] = useState(false);
 
   const [settlementOpen, setSettlementOpen] = useState(false);
   const [settlementPaidBy, setSettlementPaidBy] = useState('');
@@ -179,6 +187,30 @@ export default function GroupDetailPage() {
     }
   };
 
+  const handleSettlementBriefing = async () => {
+    try {
+      setSettlementBriefingLoading(true);
+      const res = await assistantApi.settlementBriefing(Number(id));
+      setSettlementBriefing(res.data);
+    } catch {
+      setSettlementBriefing(null);
+    } finally {
+      setSettlementBriefingLoading(false);
+    }
+  };
+
+  const handleGroupDigest = async () => {
+    try {
+      setGroupDigestLoading(true);
+      const res = await assistantApi.groupDigest(Number(id));
+      setGroupDigest(res.data);
+    } catch {
+      setGroupDigest(null);
+    } finally {
+      setGroupDigestLoading(false);
+    }
+  };
+
   const members = group?.members ?? [];
 
   if (loading && !group) {
@@ -248,6 +280,43 @@ export default function GroupDetailPage() {
           {error}
         </div>
       )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+        <div>
+          <AssistantPanel
+            title="Settlement Briefing"
+            loading={settlementBriefingLoading}
+            narrative={settlementBriefing?.narrative}
+            citations={settlementBriefing?.citations || []}
+          />
+          {!settlementBriefing && !settlementBriefingLoading && (
+            <button
+              onClick={handleSettlementBriefing}
+              className="mt-2 text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 flex items-center gap-1.5"
+            >
+              <SparklesIcon className="w-4 h-4" />
+              Get settlement briefing
+            </button>
+          )}
+        </div>
+        <div>
+          <AssistantPanel
+            title="Group Digest"
+            loading={groupDigestLoading}
+            narrative={groupDigest?.narrative}
+            citations={groupDigest?.citations || []}
+          />
+          {!groupDigest && !groupDigestLoading && (
+            <button
+              onClick={handleGroupDigest}
+              className="mt-2 text-sm text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 flex items-center gap-1.5"
+            >
+              <SparklesIcon className="w-4 h-4" />
+              Generate group digest
+            </button>
+          )}
+        </div>
+      </div>
 
       <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
         <nav className="flex gap-6">

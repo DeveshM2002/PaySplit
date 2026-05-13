@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { PencilIcon, TrashIcon } from '@heroicons/react/24/outline';
 import { expenseApi } from '../../api/expenses';
+import { assistantApi } from '../../api/assistant';
 import useAuthStore from '../../store/authStore';
 import {
   formatCurrency,
@@ -9,6 +10,8 @@ import {
   getCategoryIcon,
 } from '../../utils/helpers';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import AiChatInput from '../../components/ui/AiChatInput';
+import AssistantPanel from '../../components/ui/AssistantPanel';
 
 export default function ExpenseDetailPage() {
   const { id } = useParams();
@@ -21,6 +24,9 @@ export default function ExpenseDetailPage() {
   const [submittingComment, setSubmittingComment] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState(null);
+  const [aiAnswer, setAiAnswer] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
 
   const isPayer = user?.id && expense?.paidById === user.id;
 
@@ -58,6 +64,27 @@ export default function ExpenseDetailPage() {
       setError(err.response?.data?.message || 'Failed to add comment');
     } finally {
       setSubmittingComment(false);
+    }
+  };
+
+  const handleExpenseAsk = async (question) => {
+    if (!expense) return;
+    try {
+      setAiLoading(true);
+      setAiError(null);
+      const gid = expense.groupId ?? expense.group?.id ?? undefined;
+      const res = await assistantApi.expenseQnA(
+        `${question} (Context: expense id ${expense.id}, description "${expense.description}", amount ${expense.amount}).`,
+        (expense.description || '').slice(0, 120),
+        gid || undefined,
+        null
+      );
+      setAiAnswer(res.data);
+    } catch (err) {
+      setAiError(err.response?.data?.error || err.response?.data?.message || 'AI request failed');
+      setAiAnswer(null);
+    } finally {
+      setAiLoading(false);
     }
   };
 
@@ -184,6 +211,21 @@ export default function ExpenseDetailPage() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      <div className="mb-6 rounded-xl border border-purple-200 dark:border-purple-800 bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-950/30 dark:to-indigo-950/30 p-4">
+        <p className="text-sm font-medium text-purple-900 dark:text-purple-100 mb-2">
+          Ask about this expense
+        </p>
+        <AiChatInput
+          placeholder="e.g. Is this categorized reasonably?"
+          onSubmit={handleExpenseAsk}
+          loading={aiLoading}
+        />
+        {aiError && <p className="mt-2 text-sm text-red-500">{aiError}</p>}
+        {aiAnswer?.narrative && (
+          <AssistantPanel title="Answer" narrative={aiAnswer.narrative} citations={aiAnswer.citations || []} defaultOpen className="mt-3 border-purple-300 dark:border-purple-700" />
+        )}
       </div>
 
       <div className="card">

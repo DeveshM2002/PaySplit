@@ -64,6 +64,12 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.UNAUTHORIZED, "Authentication failed. Please check your credentials.");
     }
 
+    @ExceptionHandler(UpstreamAiException.class)
+    public ResponseEntity<Map<String, Object>> handleUpstreamAi(UpstreamAiException ex) {
+        log.warn("LLM/upstream AI error [{}]: {}", ex.getHttpStatus().value(), ex.getMessage());
+        return buildErrorResponse(ex.getHttpStatus(), ex.getMessage());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidationErrors(MethodArgumentNotValidException ex) {
         Map<String, String> fieldErrors = new HashMap<>();

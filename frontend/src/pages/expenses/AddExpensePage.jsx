@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { MagnifyingGlassIcon, XMarkIcon, SparklesIcon } from '@heroicons/react/24/outline';
 import { groupApi } from '../../api/groups';
 import { userApi } from '../../api/users';
 import { expenseApi } from '../../api/expenses';
+import { assistantApi } from '../../api/assistant';
 import useAuthStore from '../../store/authStore';
 import {
   EXPENSE_CATEGORIES,
@@ -12,6 +13,7 @@ import {
   formatCurrency,
 } from '../../utils/helpers';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import AiChatInput from '../../components/ui/AiChatInput';
 
 export default function AddExpensePage() {
   const navigate = useNavigate();
@@ -37,6 +39,10 @@ export default function AddExpensePage() {
   const [loading, setLoading] = useState(false);
   const [loadingGroups, setLoadingGroups] = useState(true);
   const [error, setError] = useState(null);
+  const [aiDraftLoading, setAiDraftLoading] = useState(false);
+  const [aiDraftError, setAiDraftError] = useState(null);
+  const [categorySuggestion, setCategorySuggestion] = useState(null);
+  const [categorySugLoading, setCategorySugLoading] = useState(false);
 
   useEffect(() => {
     const fetchGroups = async () => {
@@ -155,6 +161,85 @@ export default function AddExpensePage() {
     }));
   };
 
+  const handleAiDraft = async (utterance) => {
+    try {
+      setAiDraftLoading(true);
+      setAiDraftError(null);
+      const res = await assistantApi.expenseDraft(
+        utterance,
+        groupId ? Number(groupId) : undefined,
+        'INR'
+      );
+      const payload = res.data;
+      const d = payload?.draft;
+      if (!d) {
+        setAiDraftError(payload?.narrative || 'Could not parse expense');
+        return;
+      }
+      if (d.description) setDescription(d.description);
+      if (d.amount != null && d.amount !== '') setAmount(String(d.amount));
+      const cat = d.category;
+      if (cat) setCategory(typeof cat === 'string' ? cat : cat?.name ?? 'OTHER');
+      if (d.date) {
+        const raw = typeof d.date === 'string' ? d.date : String(d.date);
+        setDate(raw.length >= 10 ? raw.slice(0, 10) : raw);
+      }
+      if (d.groupId) setGroupId(String(d.groupId));
+      if (d.splitType) setSplitType(d.splitType);
+
+      let memberLookup = members;
+      if (d.groupId) {
+        try {
+          const gr = await groupApi.getById(d.groupId);
+          const g = gr.data?.group ?? gr.data;
+          memberLookup = (g?.members ?? []).map((x) => ({
+            id: x.id ?? x.userId,
+            name: x.name ?? x.user?.name ?? x.email,
+          }));
+          setMembers(memberLookup);
+        } catch {
+          memberLookup = [];
+        }
+      }
+
+      if (d.paidById != null && d.paidById !== '') {
+        setPaidById(Number(d.paidById));
+      }
+
+      if (d.splits?.length) {
+        setParticipants(
+          d.splits.map((s) => ({
+            id: s.userId,
+            name:
+              memberLookup.find((m) => m.id === s.userId)?.name ||
+              s.userName ||
+              `User ${s.userId}`,
+          }))
+        );
+      }
+    } catch (err) {
+      setAiDraftError(err.response?.data?.message || err.response?.data?.error || 'Failed to parse expense');
+    } finally {
+      setAiDraftLoading(false);
+    }
+  };
+
+  const handleDescriptionBlur = async () => {
+    const desc = description.trim();
+    if (!desc || desc.length < 3) return;
+    try {
+      setCategorySugLoading(true);
+      const res = await assistantApi.suggestCategory(desc);
+      if (res.data?.topCategory && res.data.topCategory !== category) {
+        setCategorySuggestion(res.data);
+      }
+    } catch {
+      setCategorySuggestion(null);
+    } finally {
+      setCategorySugLoading(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!description.trim() || amountNum <= 0) return;
@@ -196,6 +281,23 @@ export default function AddExpensePage() {
         Add Expense
       </h1>
 
+      <div className="mb-6">
+        <AiChatInput
+          placeholder="Describe your expense in natural language..."
+          onSubmit={handleAiDraft}
+          loading={aiDraftLoading}
+        />
+        {aiDraftError && (
+          <p className="mt-2 text-sm text-red-500">{aiDraftError}</p>
+        )}
+        {aiDraftLoading && (
+          <div className="mt-2 flex items-center gap-2 text-sm text-purple-600 dark:text-purple-400">
+            <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+            Parsing your expense...
+          </div>
+        )}
+      </div>
+
       <form onSubmit={handleSubmit} className="space-y-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
@@ -204,7 +306,11 @@ export default function AddExpensePage() {
           <input
             type="text"
             value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            onChange={(e) => {
+              setDescription(e.target.value);
+              setCategorySuggestion(null);
+            }}
+            onBlur={handleDescriptionBlur}
             className="input-field"
             placeholder="What was it for?"
             required
@@ -233,7 +339,10 @@ export default function AddExpensePage() {
           </label>
           <select
             value={category}
-            onChange={(e) => setCategory(e.target.value)}
+            onChange={(e) => {
+              setCategory(e.target.value);
+              setCategorySuggestion(null);
+            }}
             className="input-field"
           >
             {EXPENSE_CATEGORIES.map((c) => (
@@ -242,6 +351,35 @@ export default function AddExpensePage() {
               </option>
             ))}
           </select>
+          {categorySugLoading && (
+            <div className="mt-1.5 flex items-center gap-1.5 text-xs text-purple-500">
+              <div className="w-3 h-3 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+              Suggesting category...
+            </div>
+          )}
+          {categorySuggestion && !categorySugLoading && (
+            <div className="mt-1.5 flex items-center gap-2">
+              <SparklesIcon className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+              <span className="text-xs text-gray-500 dark:text-gray-400">AI suggests:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setCategory(categorySuggestion.topCategory);
+                  setCategorySuggestion(null);
+                }}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 text-xs hover:bg-purple-200 dark:hover:bg-purple-800/40 transition-colors"
+              >
+                {getCategoryIcon(categorySuggestion.topCategory)}{' '}
+                {EXPENSE_CATEGORIES.find((c) => c.value === categorySuggestion.topCategory)?.label ||
+                  categorySuggestion.topCategory}
+              </button>
+              {categorySuggestion.rationale && (
+                <span className="text-xs text-gray-400 max-w-[200px] truncate" title={categorySuggestion.rationale}>
+                  {categorySuggestion.rationale}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
         <div>
